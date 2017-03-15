@@ -8,10 +8,12 @@ PAGINATE_BY = 10
 
 @app.route("/")
 @app.route("/page/<int:page>")
-def entries(page=1):
+def entries(page=1, paginate_by=10):
     # Zero-indexed page
     #entries_per = limit
     paginate_by = int(request.args.get('entries_per', PAGINATE_BY))
+    if paginate_by > 50 or paginate_by < 1:
+        paginate_by = 10
     page_index = page - 1
 
     count = session.query(Entry).count()
