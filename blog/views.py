@@ -2,6 +2,7 @@ from flask import render_template
 
 from . import app
 from .database import session, Entry
+
     
 PAGINATE_BY = 10
 #paginate_by = int(request.args.get('entries_per', PAGINATE_BY))
@@ -37,17 +38,23 @@ def entries(page=1, paginate_by=10):
         total_pages=total_pages
     )
 
+from flask_login import login_required
+
 @app.route("/entry/add", methods=["GET"])
+@login_required
 def add_entry_get():
     return render_template("add_entry.html")
     
 from flask import request, redirect, url_for
+from flask_login import current_user
 
 @app.route("/entry/add", methods=["POST"])
+@login_required
 def add_entry_post():
     entry = Entry(
         title=request.form["title"],
         content=request.form["content"],
+        author=current_user
     )
     session.add(entry)
     session.commit()
@@ -61,13 +68,16 @@ def entry(id):
     entry = entry)
     
 @app.route("/entry/<id>/edit", methods=["GET"])
+@login_required
 def edit_entry_get(id):
     entry =  session.query(Entry).get(id)
-    
-    return render_template("edit_entry.html",
-    entry=entry)
-    
+    if entry.author is None or entry.author.id == current_user.id:
+        return render_template("edit_entry.html",
+        entry=entry)
+    else:
+        return redirect(url_for("entries"))
 @app.route("/entry/<id>/edit", methods=["POST"])
+@login_required
 def edit_entry_post(id):
     entry = session.query(Entry).get(id)
     entry.title = request.form["title"]
@@ -77,15 +87,48 @@ def edit_entry_post(id):
     return redirect(url_for("entries"))
     
 @app.route("/entry/<id>/delete", methods=["GET"])
+@login_required
 def delete_entry_get(id):
     entry = session.query(Entry).get(id)
-    
-    return render_template("delete_entry.html",
+    if entry.author is None or entry.author.id == current_user.id:
+        return render_template("delete_entry.html",
     entry = entry)
+    else:
+        return render_template("entry.html", entry=entry)
     
 @app.route("/entry/<id>/delete", methods=["POST"])
+@login_required
 def delete_entry_post(id):
     entry = session.query(Entry).get(id)
     session.delete(entry)
     session.commit()
+    return redirect(url_for("entries"))
+    
+@app.route("/login", methods=["GET"])
+def login_get():
+    return render_template("login.html")
+    
+from flask import flash
+from flask_login import login_user
+from werkzeug.security import check_password_hash
+from .database import User
+
+@app.route("/login", methods=["POST"])
+def login_post():
+    email = request.form["email"]
+    password = request.form["password"]
+    user = session.query(User).filter_by(email=email).first()
+    if not user or not check_password_hash(user.password, password):
+        flash("Incorrect username or password", "danger")
+        return redirect(url_for("login_get"))
+
+    login_user(user)
+    return redirect(request.args.get('next') or url_for("entries"))
+    
+from flask_login import logout_user
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
     return redirect(url_for("entries"))
